@@ -1,4 +1,4 @@
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import String, SmallInteger, Date
 import datetime
 #SQLAlchemy моделі (Book, Author, Genre, Reader)
@@ -12,6 +12,9 @@ class Book(Base):
     year: Mapped[int] = mapped_column(SmallInteger)
     isbn: Mapped[str] = mapped_column(String(30), primary_key=True)#Example, 978-3-16-148410-0
     description: Mapped[str] = mapped_column(String(1488))
+    
+    def __repr__(self):
+        return f"{self.title} was published in {self.year}, it's isbn is {self.description}"
 
 class Author(Base):
     __tablename__ = "author"

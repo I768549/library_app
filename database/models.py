@@ -75,23 +75,11 @@ class Loan(Base):
     book_id: Mapped[int] = mapped_column(ForeignKey("book.id"))
     book: Mapped[Book] = relationship(back_populates="loans")
 
-"""
-A one to many relationship places a foreign key on the child table referencing the parent.
-relationship() is then specified on the parent, as referencing a collection of items represented by the child
+from sqlalchemy import create_engine
 
-Many to one places a foreign key in the parent table referencing the child. relationship()
-is declared on the parent, where a new scalar-holding attribute will be created
+DATABASE_URL = "postgresql+psycopg://siercig:5674@localhost:5432/library_db"
+engine = create_engine(DATABASE_URL, echo=True)
 
-One To One is essentially a One To Many relationship from a foreign key perspective, 
-but indicates that there will only be one row at any time that refers to a particular parent row.
-
-Many to Many adds an association table between two classes
-The association table is nearly always given as a Core Table object or other Core selectable such as a 
-Join object, and is indicated by the relationship.secondary argument to relationship(). 
-Usually, the Table uses the MetaData object associated with the declarative base class,
-so that the ForeignKey directives can locate the remote tables with which to link:
-Setting Bi-Directional Many-to-many
-
-For a bidirectional relationship, both sides of the relationship contain a collection.
-Specify using relationship.back_populates, and for each relationship() specify the common association table
-"""
+def init_db() -> None:
+    Base.metadata.create_all(engine)
+    

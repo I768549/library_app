@@ -1,12 +1,9 @@
-import tkinter as tk
-
-root = tk.Tk()
-root.title("Library App")
-root.configure(bg="white")
-root.minsize(400, 300)
-root.maxsize(600, 400)
-root.geometry("800x600+700+300")
+from database.models import init_db
+from database.repository import seed_database
+from gui.app import LibraryApp
 
 
-root.mainloop()
-
+if __name__ == "__main__":
+    init_db()
+    seed_database()
+    LibraryApp().run()

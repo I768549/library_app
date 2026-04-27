@@ -5,5 +5,7 @@ from gui.app import LibraryApp
 
 if __name__ == "__main__":
     init_db()
+    #Giving initial seed to the db
     seed_database()
+    
     LibraryApp().run()

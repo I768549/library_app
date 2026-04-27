@@ -17,6 +17,7 @@ from database import repository
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 DEFAULT_MODEL = "llama3.2"
+DEFAULT_KEEP_ALIVE = "30m"
 
 SYSTEM_TEMPLATE = """
 You're a professional library assistant
@@ -51,6 +52,7 @@ def chat_stream(
     on_chunk: Callable[[str], None],
     model: str = DEFAULT_MODEL,
     url: str = OLLAMA_URL,
+    keep_alive: str = DEFAULT_KEEP_ALIVE,
     timeout: int = 180,
 ) -> None:
     """Надсилає історію повідомлень в Ollama і викликає on_chunk для кожного
@@ -65,7 +67,12 @@ def chat_stream(
         *history,
     ]
     body = json.dumps(
-        {"model": model, "messages": messages, "stream": True},
+        {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+            "keep_alive": keep_alive,
+        },
         ensure_ascii=False,
     ).encode("utf-8")
 
@@ -99,3 +106,36 @@ def chat_stream(
             f"Для роботи необхідно підняти 'ollama serve' та переконатися, що модель '{model}' "
             f"завантажена і є в ollama list, якщо ні, то 'ollama pull {model}'."
         ) from exc
+
+
+def warmup_model(
+    model: str = DEFAULT_MODEL,
+    url: str = OLLAMA_URL,
+    keep_alive: str = DEFAULT_KEEP_ALIVE,
+    timeout: int = 20,
+) -> None:
+    """Прогріває модель коротким запитом, щоб зменшити затримку
+    першої реальної відповіді після запуску застосунку.
+    """
+    body = json.dumps(
+        {
+            "model": model,
+            "messages": [{"role": "user", "content": "привет"}],
+            "stream": False,
+            "keep_alive": keep_alive,
+            "options": {"num_predict": 1},
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+        if "error" in data:
+            raise RuntimeError(data["error"])

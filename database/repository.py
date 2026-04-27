@@ -1,6 +1,7 @@
 from .models import engine, Author, Genre, Loan, Book, Reader
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import select, or_, func, and_
+from sqlalchemy import select, or_, func, and_, delete
+from sqlalchemy.exc import IntegrityError
 import datetime
 
 def get_all_books() -> list[dict]:
@@ -56,8 +57,10 @@ def add_book(title: str, year: int, isbn: str , description: str,
             book.genres = list(session.execute(stmt).scalars().all())
             
         session.add(book)
-        session.commit()    
-    return book.id
+        session.flush()
+        book_id = book.id
+        session.commit()
+        return book_id
 
 # Для получения объекта по primary key есть удобный
 # метод session.get(Class, id) — короче чем select с where.
@@ -68,21 +71,56 @@ def delete_book(book_id: int) -> None:
         # book = session.execute(stmt).scalars().first()
         book = session.get(Book, book_id)        
         if book:
+            active_count = session.scalar(
+                select(func.count(Loan.id))
+                .where(Loan.book_id == book_id, Loan.returned_at.is_(None))
+            ) or 0
+            if active_count > 0:
+                raise ValueError("Книгу не можна видалити: є активна позика")
+
+            # If all loans are returned, remove closed loan history first,
+            # then delete the book itself.
+            session.execute(
+                delete(Loan).where(
+                    Loan.book_id == book_id,
+                    Loan.returned_at.is_not(None),
+                )
+            )
             session.delete(book)
-            session.commit()
+            try:
+                session.commit()
+            except IntegrityError as exc:
+                session.rollback()
+                raise ValueError("Книгу не можна видалити: є активна позика") from exc
         else:
             raise ValueError(f"There is no such book with id: {book_id}")
 
 def add_reader(full_name: str, email: str) -> int:
     with Session(engine) as session:
+        normalized_email = email.strip().lower()
+        existing_reader_id = session.scalar(
+            select(Reader.id).where(func.lower(Reader.email) == normalized_email)
+        )
+        if existing_reader_id is not None:
+            raise ValueError("Читач з таким email вже існує")
+
         reader = Reader(
             full_name = full_name,
-            email = email
+            email = normalized_email
         )
         reader.registered_at = datetime.date.today()
         session.add(reader)
-        session.commit()
-    return reader.id
+        try:
+            session.flush()
+            reader_id = reader.id
+            session.commit()
+        except IntegrityError as exc:
+            session.rollback()
+            # Race-safe fallback if the same email appears between validation and commit.
+            if "reader_email_key" in str(exc):
+                raise ValueError("Читач з таким email вже існує") from exc
+            raise
+        return reader_id
 
 def get_all_readers() -> list[dict]:
     with Session(engine) as session:  
@@ -116,8 +154,19 @@ def delete_reader(reader_id: int) -> None:
         ) or 0
         if active_count > 0:
             raise ValueError("The reader has loans, must give the books back first")
+
+        session.execute(
+            delete(Loan).where(
+                Loan.reader_id == reader_id,
+                Loan.returned_at.is_not(None),
+            )
+        )
         session.delete(reader)
-        session.commit()
+        try:
+            session.commit()
+        except IntegrityError as exc:
+            session.rollback()
+            raise ValueError("The reader has loans, must give the books back first") from exc
 
 def get_active_loans() -> list[dict]:
     with Session(engine) as session:

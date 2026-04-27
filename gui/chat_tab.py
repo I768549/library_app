@@ -22,6 +22,7 @@ class ChatTab:
 
         self._build_ui()
         self._append("Feel free to ask! \n")
+        self._warmup_model_async()
 
     def _build_ui(self):
         top = ttk.Frame(self.parent)
@@ -92,6 +93,16 @@ class ChatTab:
         self._append("Історію очищено.\n\n", "system")
 
     # ---- send / stream ----
+
+    def _warmup_model_async(self):
+        def worker():
+            try:
+                recommender.warmup_model()
+            except Exception:
+                # Warmup is best-effort and must not block the chat UI.
+                return
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _send(self):
         if self.streaming:

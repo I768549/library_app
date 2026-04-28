@@ -28,8 +28,13 @@ class BooksTab:
 
         ttk.Label(top, text="Пошук:").pack(side="left")
         self.search_var = tk.StringVar()
-        self.search_var.trace_add("write", lambda *_: self._apply_search())
-        ttk.Entry(top, textvariable=self.search_var, width=40).pack(side="left", padx=5)
+        # NOTE: прибрали "живий" пошук через trace_add
+        self.search_entry = ttk.Entry(top, textvariable=self.search_var, width=40)
+        self.search_entry.pack(side="left", padx=5)
+        self.search_entry.bind("<Return>", lambda _e: self._apply_search())
+
+        self.btn_search = ttk.Button(top, text="Шукати", command=self._apply_search)
+        self.btn_search.pack(side="left", padx=5)
 
         self.btn_refresh = ttk.Button(top, text="Оновити", command=self.refresh_books)
         self.btn_refresh.pack(side="left", padx=5)
@@ -66,7 +71,7 @@ class BooksTab:
     # ---- progress / status helpers ----
 
     def _start(self, msg):
-        for b in (self.btn_refresh, self.btn_add, self.btn_delete):
+        for b in (self.btn_search, self.btn_refresh, self.btn_add, self.btn_delete):
             b.config(state="disabled")
         self.progress.pack(side="right", padx=5)
         self.progress.start(10)
@@ -76,7 +81,7 @@ class BooksTab:
     def _done(self, msg):
         self.progress.stop()
         self.progress.pack_forget()
-        for b in (self.btn_refresh, self.btn_add, self.btn_delete):
+        for b in (self.btn_search, self.btn_refresh, self.btn_add, self.btn_delete):
             b.config(state="normal")
         elapsed = time.perf_counter() - getattr(self, "_t0", time.perf_counter())
         self.status_var.set(f"{msg} (за {elapsed:.2f}с)")
@@ -84,7 +89,7 @@ class BooksTab:
     def _err(self, exc):
         self.progress.stop()
         self.progress.pack_forget()
-        for b in (self.btn_refresh, self.btn_add, self.btn_delete):
+        for b in (self.btn_search, self.btn_refresh, self.btn_add, self.btn_delete):
             b.config(state="normal")
         messagebox.showerror("Помилка", str(exc))
         self.status_var.set(f"Помилка: {exc}")
@@ -125,13 +130,17 @@ class BooksTab:
             )
 
     def _apply_search(self):
-        q = self.search_var.get().strip().lower()
+        q = self.search_var.get().strip()
         if not q:
             self._render(self._all_books)
             return
+
+        q_norm = q.casefold()
+
         filtered = [
             b for b in self._all_books
-            if q in b["title"].lower() or q in b["authors"].lower()
+            if str(b.get("title", "")).casefold() == q_norm
+            or str(b.get("authors", "")).casefold() == q_norm
         ]
         self._render(filtered)
 
